@@ -1,0 +1,3 @@
+[submodule "linearbpdesign"]
+	path = linearbpdesign
+	url = git@gitlab.inria.fr:amibio/linearbpdesign.git
