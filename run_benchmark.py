@@ -1,14 +1,18 @@
-
 import time
 START = time.time()
 
+import sys
 import argparse
 from subprocess import Popen, PIPE
+from pathlib import Path
 
 import infrared as ir
 import infrared.rna as rna
 
 import RNA
+
+sys.path.append(str(Path(__file__).parent/'linearbpdesign'))
+from linearbpdesign.sampler import Sampler as LinearSampler
 
 # in kcal/mol
 ENERGYWEIGHT = - 1.98717 * (273.15 + 37) / 1000
@@ -18,25 +22,6 @@ def is_unique(seq):
     fc = RNA.fold_compound(seq)
     sub = fc.subopt(10)
     return len(sub)==1 or (sub[0].energy!=sub[1].energy)
-
-def _call_rnainverse(dbn, seed, round=1):
-    """Call RNAinverse for given target in dbn and seed sequence
-    """
-    cmd = ["RNAinverse", f"-R{round}"]
-    with Popen(cmd, stdin=PIPE, stdout=PIPE, universal_newlines=True) as p:
-        output, _ = p.communicate(input=f"{dbn}\n{seed}\n")
-        lst = output.split()
-        # Solution found
-        if len(lst) == 2:
-            return lst[0], int(lst[1]), 0
-        return lst[0], int(lst[1]), int(lst[3])
-
-
-def create_model_rnainverse(target):
-    """Create infrared model for uniform sampling as in RNAinverse (ignore structure constraint from target)
-    """
-    model = ir.Model(len(target), 4)
-    return model
 
 
 def create_model_uniform(target):
@@ -80,23 +65,20 @@ def create_model_GC(target):
     return model
 
 
-def design(target, model, nSol=1, timeLimit=30):
+
+def design(target, sampler, nSol=1, timeLimit=30):
     """Run RNAinverse and report result
     """
     nFound = 0
     nRound = 0
-    sampler = ir.Sampler(model)
-    # Force the precomputation
-    rna.ass_to_seq(sampler.sample())
     current_best = (None, None, None, len(target))
     current_time = time.time()
     while nFound < nSol:
         nRound += 1
-        seed = rna.ass_to_seq(sampler.sample())
+        seed = sampler.sample()
         # print(nRound, seed, time.time() - START, end='\r')
-        # final, hamming, bp = _call_rnainverse(target, seed)
         final, bp = RNA.inverse_fold(seed, target)
-        hamming = sum(x==y for x, y in zip(seed, final))
+        hamming = sum(x!=y for x, y in zip(seed, final))
         if (bp == 0) and is_unique(final):
             nFound += 1
             new_time = time.time()
@@ -113,32 +95,47 @@ def design(target, model, nSol=1, timeLimit=30):
     if current_best[0] is not None:
         print(target, *current_best, nRound, False, f'{time.time() - current_time:.3f}', sep='\t')
 
+class ModelSampler:
+    """Simple sequence sampler from given infrared model
+    """
+    def __init__(self, model):
+        self.sampler = ir.Sampler(model)
+        # Force precomputation
+        self.sampler.sample()
+
+    def sample(self):
+        return rna.ass_to_seq(self.sampler.sample())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         formatter_class = argparse.ArgumentDefaultsHelpFormatter,
         description =
-        """Estimation of evolution hardness for given structure.
-        The script calls RNAinverse with -R1 option several times with different seed sequence strategy and reports the number of tries needed to find the solution.
+        """Run RNAinverse with defined initial sequence strategy for given structure.
+        The script calls RNAlib inverse_fold function repeatedly and reports the number of tries needed to find the solution.
         This is equivalent to running RNAinverse with negative value for -R option (assuming seed sequence is changed at each try)
         """
     )
     parser.add_argument('target', metavar='target', type=str, help='Target PK-free secondary structure in dbn')
     parser.add_argument('-n', '--number', type=int, default=1, help='(Maximum) number of solutions. The script will try to find up to n solutions within time limit')
-    parser.add_argument('--seed', choices=['rnainverse', 'uniform', 'incarnation', 'gcheavy'], default='uniform', help='Strategy to initiate seed sequences')
+    parser.add_argument('--seed', choices=['uniform', 'incarnation', 'gcheavy', 'linearbp'], default='uniform', help='Strategy to initiate seed sequences')
     parser.add_argument('--time', type=int, default=3600, help='Maximal running time in second')
 
     args = parser.parse_args()
 
     target = args.target
+    model = None
+    sampler = None
     match args.seed:
-        case 'rnainverse':
-            model = create_model_rnainverse(target)
         case 'uniform':
             model = create_model_uniform(target)
         case 'incarnation':
             model = create_model_incarnation(target)
         case 'gcheavy':
             model = create_model_GC(target)
+        case 'linearbp':
+            sampler = LinearSampler(target)
 
-    design(target, model, nSol=args.number, timeLimit=args.time)
+    if model is not None:
+        sampler = ModelSampler(model)
+
+    design(target, sampler, nSol=args.number, timeLimit=args.time)
