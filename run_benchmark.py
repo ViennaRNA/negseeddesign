@@ -16,6 +16,8 @@ from linearbpdesign.sampler import Sampler as LinearSampler
 
 # in kcal/mol
 ENERGYWEIGHT = - 1.98717 * (273.15 + 37) / 1000
+# BP threshold to print solution
+NEAR = 10
 
 
 def is_unique(seq):
@@ -66,7 +68,7 @@ def create_model_GC(target):
 
 
 
-def design(target, sampler, nSol=1, timeLimit=30):
+def design(target, sampler, nSol=1, print_any=False):
     """Run RNAinverse and report result
     """
     nFound = 0
@@ -79,18 +81,23 @@ def design(target, sampler, nSol=1, timeLimit=30):
         # print(nRound, seed, time.time() - START, end='\r')
         final, bp = RNA.inverse_fold(seed, target)
         hamming = sum(x!=y for x, y in zip(seed, final))
+        new_time = time.time()
+        print_time = new_time - current_time
         if (bp == 0) and is_unique(final):
             nFound += 1
-            new_time = time.time()
-            print(target, seed, final, hamming, int(bp), nRound, True, f'{new_time-current_time:.3f}', sep='\t')
+            print(target, seed, final, hamming, int(bp), nRound, True, f'{print_time:.3f}', sep='\t')
             # Reinit
             nRound = 0
             current_best = (None, None, None, len(target))
             current_time = new_time
         elif bp < current_best[3]:
             current_best = (seed, final, hamming, int(bp))
-        if time.time() - START >timeLimit:
-             break
+            if 0 < current_best[3] <= NEAR:
+                print(target, seed, final, hamming, int(bp), nRound, False, f'{print_time:.3f}', sep='\t')
+        if print_any and (bp == 0) and (not is_unique(final)):
+            print(target, seed, final, hamming, int(bp), nRound, False, f'{print_time:.3f}', sep='\t')
+        # if time.time() - START >timeLimit:
+        #      break
 
     if current_best[0] is not None:
         print(target, *current_best, nRound, False, f'{time.time() - current_time:.3f}', sep='\t')
@@ -119,6 +126,8 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--number', type=int, default=1, help='(Maximum) number of solutions. The script will try to find up to n solutions within time limit')
     parser.add_argument('--seed', choices=['uniform', 'incarnation', 'gcheavy', 'linearbp'], default='uniform', help='Strategy to initiate seed sequences')
     parser.add_argument('--time', type=int, default=3600, help='Maximal running time in second')
+    parser.add_argument('--print-any', action='store_true', help='Print any MFE and near result')
+    parser.add_argument('-m', '--modulo', type=int, default=0, help='Modulo')
 
     args = parser.parse_args()
 
@@ -133,9 +142,10 @@ if __name__ == "__main__":
         case 'gcheavy':
             model = create_model_GC(target)
         case 'linearbp':
-            sampler = LinearSampler(target)
+            m = None if args.modulo == 0 else args.modulo
+            sampler = LinearSampler(target, uptomodulo=None)
 
     if model is not None:
         sampler = ModelSampler(model)
 
-    design(target, sampler, nSol=args.number, timeLimit=args.time)
+    design(target, sampler, nSol=args.number, print_any=args.print_any)
