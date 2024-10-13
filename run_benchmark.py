@@ -5,14 +5,16 @@ import sys
 import argparse
 from subprocess import Popen, PIPE
 from pathlib import Path
+import random
 
-import infrared as ir
-import infrared.rna as rna
+# import infrared as ir
+# import infrared.rna as rna
 
 import RNA
 
 sys.path.append(str(Path(__file__).parent/'linearbpdesign'))
-from linearbpdesign.sampler import Sampler as LinearSampler
+# from sampler import Sampler as LinearSampler
+from samplerbiseparable import Sampler as BILinearSampler
 
 # in kcal/mol
 ENERGYWEIGHT = - 1.98717 * (273.15 + 37) / 1000
@@ -20,9 +22,23 @@ ENERGYWEIGHT = - 1.98717 * (273.15 + 37) / 1000
 NEAR = 10
 
 
+def dbn_to_bps(ss):
+    """Return list of bps (0-index) of given nested basepairs
+    """
+    tmp = []
+    res = []
+    for ind, c in enumerate(ss):
+        if c == '(':
+            tmp.append(ind)
+        elif c == ')':
+            i = tmp.pop()
+            res.append((i, ind))
+    return res
+
+
 def is_unique(seq):
     fc = RNA.fold_compound(seq)
-    sub = fc.subopt(10)
+    sub = fc.subopt(1)
     return len(sub)==1 or (sub[0].energy!=sub[1].energy)
 
 
@@ -102,6 +118,40 @@ def design(target, sampler, nSol=1, print_any=False):
     if current_best[0] is not None:
         print(target, *current_best, nRound, False, f'{time.time() - current_time:.3f}', sep='\t')
 
+
+class GCSampler:
+    """Simple sampler for GC heavy seed w/o using Infrared
+    """
+    def __init__(self, target):
+        self.target = target
+        self.length = len(target)
+        self.bps = dbn_to_bps(target)
+
+    def sample(self):
+        seq = ['A'] * self.length
+        for i, j in self.bps:
+            x = random.choice(['CG', 'GC'])
+            seq[i] = x[0]
+            seq[j] = x[1]
+        return ''.join(seq)
+
+class UniformSampler:
+    """Simple uniform seed sampler w/o using Infrared
+    """
+    def __init__(self, target):
+        self.target = target
+        self.length = len(target)
+        self.bps = dbn_to_bps(target)
+
+    def sample(self):
+        seq = [x for x in RNA.random_string(self.length, 'ACGU')]
+        for i, j in self.bps:
+            x = random.choice(['AU', 'CG', 'GC', 'GU', 'UA', 'UG'])
+            seq[i] = x[0]
+            seq[j] = x[1]
+        return ''.join(seq)
+
+
 class ModelSampler:
     """Simple sequence sampler from given infrared model
     """
@@ -136,16 +186,17 @@ if __name__ == "__main__":
     sampler = None
     match args.seed:
         case 'uniform':
-            model = create_model_uniform(target)
+            sampler = UniformSampler(target)
         case 'incarnation':
             model = create_model_incarnation(target)
         case 'gcheavy':
-            model = create_model_GC(target)
+            sampler = GCSampler(target)
         case 'linearbp':
             m = None if args.modulo == 0 else args.modulo
-            sampler = LinearSampler(target, uptomodulo=None)
+            sampler = BILinearSampler(target, uptomoduloA=m, uptomoduloC=m)
 
     if model is not None:
-        sampler = ModelSampler(model)
+        sampler = BIModelSampler(model)
+
 
     design(target, sampler, nSol=args.number, print_any=args.print_any)
