@@ -52,13 +52,12 @@ def sample_mfe(size, nb, verbose=False):
         w = RNA.random_string(size, "ACGU")
         fc = RNA.fold_compound(w)
         mfe, _ = fc.mfe()
-        fc.pf()
-        ens = fc.ensemble_defect(mfe)
         if verbose:
-            print(mfe, ens, (w.count('G') + w.count('C'))/size, w, sep=',')
+            fc.pf()
+            ens = fc.ensemble_defect(mfe)
+            print(w, mfe, ens, (w.count('G') + w.count('C'))/size, w, sep=',')
         else:
-            print(mfe, ens, sep=',')
-
+            print(w, mfe)
 
 
 if __name__ == "__main__":
