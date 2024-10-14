@@ -14,7 +14,7 @@ from math import exp
 import RNA
 
 sys.path.append(str(Path(__file__).parent/'linearbpdesign'))
-# from sampler import Sampler as LinearSampler
+from sampler import Sampler as LinearSampler
 from samplerbiseparable import Sampler as BILinearSampler
 
 # in kcal/mol
@@ -203,8 +203,9 @@ if __name__ == "__main__":
     parser.add_argument('target', metavar='target', type=str, help='Target PK-free secondary structure in dbn')
     parser.add_argument('-n', '--number', type=int, default=1, help='(Maximum) number of solutions. The script will try to find up to n solutions within time limit')
     parser.add_argument('--seed', choices=['uniform', 'bpenergy', 'gcheavy', 'linearbp'], default='uniform', help='Strategy to initiate seed sequences')
-    parser.add_argument('--time', type=int, default=3600, help='Maximal running time in second')
+    # parser.add_argument('--time', type=int, default=3600, help='Maximal running time in second')
     parser.add_argument('--print-any', action='store_true', help='Print any MFE and near result')
+    parser.add_argument('--onlyA', action='store_true', help='Only A in unpaired region for LinearBPDesign')
     parser.add_argument('-m', '--modulo', type=int, default=0, help='Modulo')
 
     args = parser.parse_args()
@@ -220,8 +221,14 @@ if __name__ == "__main__":
             sampler = GCSampler(target)
         case 'linearbp':
             m = None if args.modulo == 0 else args.modulo
-            sampler = BILinearSampler(target, uptomoduloA=m, uptomoduloC=m)
+            if args.onlyA:
+                sampler = LinearSampler(target, uptomodulo=m)
+            else:
+                sampler = BILinearSampler(target, uptomoduloA=m, uptomoduloC=m)
 
+    # for _ in range(10):
+    #     print(sampler.sample())
+    # assert False
 
 
     design(target, sampler, nSol=args.number, print_any=args.print_any)
