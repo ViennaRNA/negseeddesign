@@ -145,13 +145,17 @@ class GCSampler:
 class UniformSampler:
     """Simple uniform seed sampler w/o using Infrared
     """
-    def __init__(self, target):
+    def __init__(self, target, withA=False):
         self.target = target
         self.length = len(target)
         self.bps = dbn_to_bps(target)
+        self.withA = withA
 
     def sample(self):
-        seq = [x for x in RNA.random_string(self.length, 'ACGU')]
+        if self.withA:
+            seq = ['A'] * self.length
+        else:
+            seq = [x for x in RNA.random_string(self.length, 'ACGU')]
         for i, j in self.bps:
             x = random.choice(BPLST)
             seq[i] = x[0]
@@ -161,15 +165,19 @@ class UniformSampler:
 class BPEnergySampler:
     """Simple seed sampler based on base pair energy model w/o using Infrared
     """
-    def __init__(self, target):
+    def __init__(self, target, withA=False):
         self.target = target
         self.length = len(target)
         self.bps = dbn_to_bps(target)
         self.bps_in = [(i, j) for i, j in self.bps if (i-1, j+1) in self.bps]
         self.bps_term = [(i, j) for i, j in self.bps if not (i-1, j+1) in self.bps]
+        self.withA = withA
 
     def sample(self):
-        seq = [x for x in RNA.random_string(self.length, 'ACGU')]
+        if self.withA:
+            seq = ['A'] * self.length
+        else:
+            seq = [x for x in RNA.random_string(self.length, 'ACGU')]
         for i, j in self.bps_in:
             x = random.choices(BPLST, weights=params_bp_in)[0]
             seq[i] = x[0]
@@ -205,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', choices=['uniform', 'bpenergy', 'gcheavy', 'linearbp'], default='uniform', help='Strategy to initiate seed sequences')
     # parser.add_argument('--time', type=int, default=3600, help='Maximal running time in second')
     parser.add_argument('--print-any', action='store_true', help='Print any MFE and near result')
-    parser.add_argument('--onlyA', action='store_true', help='Only A in unpaired region for LinearBPDesign')
+    parser.add_argument('--onlyA', action='store_true', help='Only A in unpaired region for Uniform, bpenergy, LinearBPDesign')
     parser.add_argument('-m', '--modulo', type=int, default=0, help='Modulo')
 
     args = parser.parse_args()
@@ -214,9 +222,9 @@ if __name__ == "__main__":
     sampler = None
     match args.seed:
         case 'uniform':
-            sampler = UniformSampler(target)
+            sampler = UniformSampler(target, args.onlyA)
         case 'bpenergy':
-            sampler = BPEnergySampler(target)
+            sampler = BPEnergySampler(target, args.onlyA)
         case 'gcheavy':
             sampler = GCSampler(target)
         case 'linearbp':
