@@ -111,11 +111,11 @@ def design(target, sampler, nSol=1, print_any=False):
             print(target, seed, final, hamming, int(bp), nRound, True, f'{print_time:.3f}', sep='\t')
             # Reinit
             nRound = 0
-            current_best = (None, None, None, len(target))
+            current_best = (seed, final, hamming, 0)
             current_time = new_time
         elif bp < current_best[3]:
             current_best = (seed, final, hamming, int(bp))
-            if 0 < current_best[3] <= NEAR:
+            if (0 < current_best[3] <= NEAR) and print_any:
                 print(target, seed, final, hamming, int(bp), nRound, False, f'{print_time:.3f}', sep='\t')
         if print_any and (bp == 0) and (not is_unique(final)):
             print(target, seed, final, hamming, int(bp), nRound, False, f'{print_time:.3f}', sep='\t')
