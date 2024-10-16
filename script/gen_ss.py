@@ -44,14 +44,22 @@ def sample_uniform(size, nb, helix_len=1):
             sampled += 1
 
 
-
-def sample_mfe(size, nb, verbose=False):
+def sample_mfe(size, nb, verbose=False, unique=False):
     """Return MFE structure of randomly generated sequences
+    Only consider the case of unique MFE
     """
-    for i in range(nb):
+    count = 0
+    while count < nb:
         w = RNA.random_string(size, "ACGU")
         fc = RNA.fold_compound(w)
         mfe, _ = fc.mfe()
+        # Check unique
+        if unique:
+            sub = fc.subopt(1)
+            # Not unique
+            if len(sub) > 1 and (sub[0].energy==sub[1].energy):
+                continue
+        count += 1
         if verbose:
             fc.pf()
             ens = fc.ensemble_defect(mfe)
@@ -75,11 +83,12 @@ if __name__ == "__main__":
     general_group.add_argument('-n', type=int, default=5000, help="Number of sampled structures (default: %(default)d)")
     general_group.add_argument('--helix_length', type=int, default=1, help="Helix length used in uniform sampling (default: %(default)d)")
     general_group.add_argument('--mfe', action="store_true", help="Use MFE structures from sampled sequence")
+    general_group.add_argument('--unique', action="store_true", help="Discard the sampled sequence without unique MFE structures")
     general_group.add_argument('--verbose', action="store_true", help="Enable verbose mode")
 
     args = general_group.parse_args()
 
     if args.mfe:
-        sample_mfe(args.size, args.n, verbose=args.verbose)
+        sample_mfe(args.size, args.n, verbose=args.verbose, unique=args.unique)
     else:
         sample_uniform(args.size, args.n, helix_len=args.helix_length)

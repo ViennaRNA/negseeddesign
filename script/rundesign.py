@@ -13,7 +13,9 @@ from math import exp
 
 import RNA
 
-sys.path.append(str(Path(__file__).parent/'linearbpdesign'))
+sys.path.append(str(Path(__file__).parent.parent/'linearbpdesign'))
+sys.path.append(str(Path(__file__).parent.parent/'script'))
+sys.path.append(str(Path(__file__).parent.parent))
 from sampler import Sampler as LinearSampler
 from samplerbiseparable import Sampler as BILinearSampler
 
@@ -49,46 +51,24 @@ def is_unique(seq):
     return len(sub)==1 or (sub[0].energy!=sub[1].energy)
 
 
-# def create_model_uniform(target):
-#     """Create infrared model from given target that supports uniform sequence sampling. The model pre-restricts nucleotides in paired positions
-#     """
-#     model = ir.Model(len(target), 4)
-#     model.add_constraints(rna.BPComp(i, j) for (i, j) in rna.parse(target))
-#     return model
-
-
-# def create_model_incarnation(target):
-#     """Create infrared model in incarnation way with targeted gc value if given
-#     Sequence weight is defined by basepair energy
-#     """
-#     model = ir.Model(len(target), 4)
-#     bps = rna.parse(target)
-#     model.add_constraints(rna.BPComp(i, j) for (i, j) in bps)
-
-#     # Add function
-#     model.add_functions([rna.BPEnergy(i, j, (i-1, j+1) not in bps) for (i, j) in bps], 'energy')
-#     model.add_functions([rna.GCCont(i) for i in range(len(target))], 'gc')
-
-#     # Set weight
-#     model.set_feature_weight(ENERGYWEIGHT, 'energy')
-#     model.set_feature_weight(0, 'gc')
-#     return model
-
-
-# def create_model_GC(target):
-#     """Create infrared model wigh random GC at unpaired region and A at unpaired positions
-#     """
-#     model = ir.Model(len(target), 4)
-#     model.add_constraints(rna.BPComp(i, j) for (i, j) in rna.parse(target))
-
-#     # Restrict domain
-#     for ind, c in enumerate(target):
-#         if c == '.':
-#             model.restrict_domains(ind, (0, 0))
-#         else:
-#             model.restrict_domains(ind, (1, 2))
-#     return model
-
+def create_sampler(target, strategy, onlyA, modulo=None, minCandidate=0):
+    """Create different sampler
+    """
+    match strategy:
+        case 'uniform':
+            sampler = UniformSampler(target, onlyA)
+        case 'bpenergy':
+            sampler = BPEnergySampler(target, onlyA)
+        case 'gcheavy':
+            sampler = GCSampler(target)
+        case 'linearbp':
+            m = None if modulo == 0 else modulo
+            if onlyA:
+                sampler = LinearSampler(target, uptomodulo=m)
+            else:
+                sampler = BILinearSampler(target, uptomoduloA=m, uptomoduloC=m)
+            sampler.auto_fill(minSol=minCandidate)
+    return sampler
 
 
 def design(target, sampler, nSol=1, print_any=False):
@@ -215,24 +195,12 @@ if __name__ == "__main__":
     parser.add_argument('--print-any', action='store_true', help='Print any MFE and near result')
     parser.add_argument('--onlyA', action='store_true', help='Only A in unpaired region for Uniform, bpenergy, LinearBPDesign')
     parser.add_argument('-m', '--modulo', type=int, default=0, help='Modulo')
+    parser.add_argument('--candidates', type=int, default=0, help='Increase LinearBP sampler modulo if possible such that candidates number is enough')
 
     args = parser.parse_args()
 
     target = args.target
-    sampler = None
-    match args.seed:
-        case 'uniform':
-            sampler = UniformSampler(target, args.onlyA)
-        case 'bpenergy':
-            sampler = BPEnergySampler(target, args.onlyA)
-        case 'gcheavy':
-            sampler = GCSampler(target)
-        case 'linearbp':
-            m = None if args.modulo == 0 else args.modulo
-            if args.onlyA:
-                sampler = LinearSampler(target, uptomodulo=m)
-            else:
-                sampler = BILinearSampler(target, uptomoduloA=m, uptomoduloC=m)
+    sampler = create_sampler(target, args.seed, args.onlyA, modulo=args.modulo, minCandidate=args.candidates)
 
     # for _ in range(10):
     #     print(sampler.sample())
