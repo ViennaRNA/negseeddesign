@@ -63,11 +63,14 @@ def create_sampler(target, strategy, onlyA, modulo=None, minCandidate=0):
             sampler = GCSampler(target)
         case 'linearbp':
             m = None if modulo == 0 else modulo
+            # Fill cache upto modulo
             if onlyA:
                 sampler = LinearSampler(target, uptomodulo=m)
             else:
                 sampler = BILinearSampler(target, uptomoduloA=m, uptomoduloC=m)
-            sampler.auto_fill(minSol=minCandidate)
+            # Keep filling cache if not enough samplers in pool
+            if sum(sampler.weights) < minCandidate:
+                sampler.auto_fill(fromModulo=m, minSol=minCandidate)
     return sampler
 
 
