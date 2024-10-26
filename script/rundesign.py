@@ -220,7 +220,7 @@ if __name__ == "__main__":
     parser.add_argument('--onlyA', action='store_true', help='Only A in unpaired region for Uniform, bpenergy, LinearBPDesign')
     parser.add_argument('-m', '--modulo', type=int, default=0, help='Modulo')
     parser.add_argument('--insertC', action='store_true', help='For each loop, fill with C in 50/50')
-    parser.add_argument('--candidates', type=int, default=0, help='Increase LinearBP sampler modulo if possible such that candidates number is enough')
+    parser.add_argument('--candidates', type=int, default=1000, help='Increase LinearBP sampler modulo if possible such that candidates number is enough')
 
     args = parser.parse_args()
 
