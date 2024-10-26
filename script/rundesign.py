@@ -44,6 +44,20 @@ def dbn_to_bps(ss):
             res.append((i, ind))
     return res
 
+def loops_from_dbn(ss):
+    """Return list of loops for given dbn each loop is a list of unpaired positions
+    """
+    tmp = [[]]
+    res = []
+    for ind, c in enumerate(ss):
+        if c == '(':
+            tmp.append([])
+        elif c == ')':
+            res.append(tmp.pop())
+        else:
+            tmp[-1].append(ind)
+    res.append(tmp.pop())
+    return [x for x in res[-1::-1] if len(x)>0]
 
 def is_unique(seq):
     fc = RNA.fold_compound(seq)
@@ -51,14 +65,14 @@ def is_unique(seq):
     return len(sub)==1 or (sub[0].energy!=sub[1].energy)
 
 
-def create_sampler(target, strategy, onlyA, modulo=None, minCandidate=0):
+def create_sampler(target, strategy, onlyA, modulo=None, minCandidate=0, insertC=False):
     """Create different sampler
     """
     match strategy:
         case 'uniform':
             sampler = UniformSampler(target, onlyA)
         case 'bpenergy':
-            sampler = BPEnergySampler(target, onlyA)
+            sampler = BPEnergySampler(target, onlyA, insertC=insertC)
         case 'gcheavy':
             sampler = GCSampler(target)
         case 'linearbp':
@@ -105,8 +119,8 @@ def design(target, sampler, nSol=1, print_any=False):
         # if time.time() - START >timeLimit:
         #      break
 
-    if current_best[0] is not None:
-        print(target, *current_best, nRound, False, f'{time.time() - current_time:.3f}', sep='\t')
+    # if current_best[0] is not None:
+    #     print(target, *current_best, nRound, False, f'{time.time() - current_time:.3f}', sep='\t')
 
 
 class GCSampler:
@@ -148,17 +162,24 @@ class UniformSampler:
 class BPEnergySampler:
     """Simple seed sampler based on base pair energy model w/o using Infrared
     """
-    def __init__(self, target, withA=False):
+    def __init__(self, target, withA=False, insertC=False):
         self.target = target
         self.length = len(target)
         self.bps = dbn_to_bps(target)
         self.bps_in = [(i, j) for i, j in self.bps if (i-1, j+1) in self.bps]
         self.bps_term = [(i, j) for i, j in self.bps if not (i-1, j+1) in self.bps]
+        self.loops = loops_from_dbn(target)
         self.withA = withA
+        self.insertC = insertC
 
     def sample(self):
         if self.withA:
             seq = ['A'] * self.length
+            if self.insertC:
+                for lst in self.loops:
+                    x = random.choice('AC')
+                    for t in lst:
+                        seq[t] = x
         else:
             seq = [x for x in RNA.random_string(self.length, 'ACGU')]
         for i, j in self.bps_in:
@@ -198,12 +219,13 @@ if __name__ == "__main__":
     parser.add_argument('--print-any', action='store_true', help='Print any MFE and near result')
     parser.add_argument('--onlyA', action='store_true', help='Only A in unpaired region for Uniform, bpenergy, LinearBPDesign')
     parser.add_argument('-m', '--modulo', type=int, default=0, help='Modulo')
+    parser.add_argument('--insertC', action='store_true', help='For each loop, fill with C in 50/50')
     parser.add_argument('--candidates', type=int, default=0, help='Increase LinearBP sampler modulo if possible such that candidates number is enough')
 
     args = parser.parse_args()
 
     target = args.target
-    sampler = create_sampler(target, args.seed, args.onlyA, modulo=args.modulo, minCandidate=args.candidates)
+    sampler = create_sampler(target, args.seed, args.onlyA, modulo=args.modulo, minCandidate=args.candidates, insertC=args.insertC)
 
     # for _ in range(10):
     #     print(sampler.sample())
